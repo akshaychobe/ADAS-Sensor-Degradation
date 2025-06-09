@@ -141,3 +141,107 @@ vim scripts/kafka_image_producer.py
 
 # Run the producer
 python scripts/kafka_image_producer.py
+
+
+---
+
+### 🔁 Kafka Consumer for Degradation Monitoring
+
+#### Run Kafka Consumer:
+```bash
+python scripts/kafka_image_consumer.py
+
+
+Paste the following into kafka_image_consumer.py:
+import os, cv2, numpy as np
+from kafka import KafkaConsumer
+
+KAFKA_TOPIC = "adas_camera_stream"
+KAFKA_BROKER = "localhost:9092"
+
+consumer = KafkaConsumer(
+    KAFKA_TOPIC,
+    bootstrap_servers=KAFKA_BROKER,
+    auto_offset_reset='earliest',
+    enable_auto_commit=True,
+    value_deserializer=lambda x: x
+)
+
+def analyze_image(image_bytes):
+    np_arr = np.frombuffer(image_bytes, np.uint8)
+    image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    if image is None: return None
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    brightness = np.mean(gray)
+    contrast = gray.std()
+    laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+    entropy = -np.sum((p := cv2.calcHist([gray], [0], None, [256], [0,256]).ravel() / gray.size) * np.log2(p + 1e-10))
+    return {
+        "brightness": round(brightness, 2),
+        "contrast": round(contrast, 2),
+        "blur": round(laplacian_var, 2),
+        "entropy": round(entropy, 2)
+    }
+
+print("[INFO] Waiting for camera stream...")
+for message in consumer:
+    result = analyze_image(message.value)
+    if result:
+        print(result)
+    else:
+        print("[WARN] Skipped corrupted or unreadable frame.")
+
+
+Run the consumer:
+python scripts/kafka_image_consumer.py
+
+
+Expected output:
+{'brightness': 107.21, 'contrast': 42.19, 'blur': 602.38, 'entropy': 7.39}
+{'brightness': 109.58, 'contrast': 40.61, 'blur': 588.93, 'entropy': 7.35}
+...
+
+
+---
+
+## 🧩 Phase 1: Real-Time Sensor Metrics Logging (SQLite Architecture)
+
+This system logs camera-based sensor health metrics in real time into a structured, queryable SQLite database — designed for high integrity, auditability, and seamless downstream processing.
+
+### 📂 Database Location
+`/data/sensor_health.db`
+
+### 🗃️ Table Schema: `sensor_metrics`
+
+| Column     | Type    | Description |
+|------------|---------|-------------|
+| id         | INTEGER | Auto-incremented record ID |
+| timestamp  | TEXT    | ISO format timestamp of frame ingestion |
+| image_id   | TEXT    | Unique identifier of the input image frame |
+| brightness | REAL    | Average pixel brightness of the frame |
+| contrast   | REAL    | Pixel intensity standard deviation |
+| blur       | REAL    | Laplacian variance (image sharpness) |
+| entropy    | REAL    | Histogram entropy (visual complexity) |
+
+### 🛠 Technologies Used
+
+- **Kafka**: Ingests camera stream in real-time from nuScenes
+- **Python OpenCV**: Extracts degradation features
+- **SQLite**: Embedded time-series database for safe logging and later retrieval
+- **Kafka Consumer**: Converts image stream to metric logs
+
+### ✅ Key Benefits
+
+- Allows multi-hour and multi-sensor traceability
+- Fully SQL-queryable (supports advanced filtering, joins, aggregation)
+- Portable and compatible with CI pipelines, Grafana dashboards, or ML model inputs
+- Can be embedded in edge devices (cars, gateways) without network reliance
+
+### 🧠 Sample SQL Query (Sensor Health Audit)
+
+```sql
+SELECT * FROM sensor_metrics
+WHERE blur < 150 AND entropy < 7.0
+ORDER BY timestamp DESC
+LIMIT 10;
+
