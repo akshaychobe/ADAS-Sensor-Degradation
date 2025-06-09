@@ -35,7 +35,7 @@ git commit -m "Initial folder structure and base files"
 git push
 
 
-🐳 2. Kafka + Zookeeper Setup (via Docker)
+## 🐳 2. Kafka + Zookeeper Setup (via Docker)
 
 cd kafka
 
