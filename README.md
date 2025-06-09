@@ -1,10 +1,23 @@
-# ADAS-Sensor-Degradation
-Sensor degradation monitoring using DENSE Dataset.
+# ADAS Sensor Degradation Monitoring (Real-Time AI Pipeline)
 
-📘 Project Setup Guide: ADAS Sensor Degradation Detection
-This guide documents the full setup and execution process for simulating camera image streams and performing predictive degradation analysis using Kafka and the DENSE dataset.
+This project simulates a real-time ADAS camera stream using the nuScenes dataset and performs predictive sensor degradation analysis using a production-grade AI pipeline. The goal is to detect, monitor, and forecast degradation trends like fogging, glare, blur, and loss of contrast in camera sensors—crucial for safe autonomous driving.
 
-🧰 1. Git + GitHub Setup
+---
+
+## 📦 Project Overview
+
+| Phase        | Functionality                                     | Technologies                           |
+|--------------|---------------------------------------------------|----------------------------------------|
+| Phase 1      | Real-time sensor image ingestion + metric logging | Kafka, OpenCV, SQLite                  |
+| Phase 2      | Forecast sensor health degradation                | PyTorch, LSTM/Transformer              |
+| Phase 3      | Trigger drift detection & retraining              | Evidently, Airflow, FastAPI            |
+| Phase 4      | Expose health endpoint for live dashboarding      | FastAPI, SQLite                        |
+
+---
+
+## 🧰 1. Git + GitHub Setup
+
+```bash
 # Clone your GitHub repository
 git clone https://github.com/YOUR_USERNAME/ADAS-Sensor-Degradation.git
 cd ADAS-Sensor-Degradation
@@ -13,30 +26,28 @@ cd ADAS-Sensor-Degradation
 mkdir -p data scripts models kafka pipeline notebooks
 touch requirements.txt .env
 
-# Track empty folders with .gitkeep
+# Track empty folders
 touch data/.gitkeep scripts/.gitkeep models/.gitkeep kafka/.gitkeep pipeline/.gitkeep notebooks/.gitkeep
 
-# Add and commit
+# Stage and commit
 git add .
 git commit -m "Initial folder structure and base files"
 git push
 
-🛠 2. Kafka + Zookeeper Setup (via Docker)
-# Go to kafka folder
+
+🐳 2. Kafka + Zookeeper Setup (via Docker)
+
 cd kafka
 
-# Create docker-compose.yml
-# (Use the YAML config provided below)
-
-# Start Kafka and Zookeeper containers
+# docker-compose.yml for Kafka + Zookeeper
 docker compose up -d
-
-# Confirm both containers are running
 docker ps
 
 
-version: '3.8'
+docker-compose.yml
 
+
+version: '3.8'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -58,103 +69,110 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-📡 3. Kafka Producer — Stream Camera Images
-# Go to scripts folder
-cd scripts
 
-# Create Kafka producer script
-touch kafka_image_producer.py
+📡 3. Kafka Producer — Stream nuScenes Camera Images
+Dataset Setup
 
-# Paste the Python code provided below into this file
+cd data
+mkdir nuscenes
+cd nuscenes
 
-# Install dependencies
-pip install kafka-python opencv-python
+# Download manually from https://www.nuscenes.org/download
+# File: v1.0-mini.tgz
 
-# Run the producer
-python kafka_image_producer.py
-
-
-kafka_image_producer.py snippet:
-
-# kafka_image_producer.py
-import os
-import cv2
-import time
-from kafka import KafkaProducer
-
-# --- CONFIGURATION ---
-IMAGE_FOLDER = r"C:\Users\Lenovo\ADAS-Sensor-Degradation\data\nuscenes\samples\CAM_FRONT"  # Updated for nuScenes
-KAFKA_TOPIC = "adas_camera_stream"
-KAFKA_BROKER = "localhost:9092"
-
-# --- Kafka Producer Setup ---
-producer = KafkaProducer(
-    bootstrap_servers=KAFKA_BROKER,
-    value_serializer=lambda v: v  # send raw JPEG bytes
-)
-
-# --- Helper: Encode Image as JPEG Bytes ---
-def encode_image(image_path):
-    img = cv2.imread(image_path)
-    if img is None:
-        return None
-    success, buffer = cv2.imencode('.jpg', img)
-    return buffer.tobytes() if success else None
-
-# --- Main Loop: Stream images ---
-image_files = sorted(os.listdir(IMAGE_FOLDER))
-for img_file in image_files:
-    if not img_file.lower().endswith(".jpg"):
-        continue
-    img_path = os.path.join(IMAGE_FOLDER, img_file)
-    encoded = encode_image(img_path)
-    if encoded:
-        producer.send(KAFKA_TOPIC, value=encoded)
-        print(f"Sent: {img_file}")
-        time.sleep(0.1)  # simulate ~10 FPS
-    else:
-        print(f"Failed to read: {img_file}")
-
-producer.flush()
-producer.close()
-
-
-
----
-
-### 📡 Streaming nuScenes Images via Kafka
-
-#### Dataset Setup:
-```bash
-# Navigate to data folder
-cd data/nuscenes
-
-# Download mini dataset (v1.0-mini.tgz) manually or using:
-# Invoke-WebRequest -Uri https://www.nuscenes.org/data/v1.0-mini.tgz -OutFile v1.0-mini.tgz
-
-# Extract
 tar -xvzf v1.0-mini.tgz
 
 
-# Update script path to use CAM_FRONT images
-vim scripts/kafka_image_producer.py
+Kafka Image Producer Setup
 
-# Run the producer
-python scripts/kafka_image_producer.py
+cd scripts
+touch kafka_image_producer.py
 
-
----
-
-### 🔁 Kafka Consumer for Degradation Monitoring
-
-#### Run Kafka Consumer:
-```bash
-python scripts/kafka_image_consumer.py
+# Install required libraries
+pip install kafka-python opencv-python
 
 
-Paste the following into kafka_image_consumer.py:
+scripts/kafka_image_producer.py
+
+import os, cv2, time
+from kafka import KafkaProducer
+
+IMAGE_FOLDER = r"C:\Users\Lenovo\ADAS-Sensor-Degradation\data\nuscenes\samples\CAM_FRONT"
+KAFKA_TOPIC = "adas_camera_stream"
+KAFKA_BROKER = "localhost:9092"
+
+producer = KafkaProducer(
+    bootstrap_servers=KAFKA_BROKER,
+    value_serializer=lambda v: v
+)
+
+def encode_image(image_path):
+    img = cv2.imread(image_path)
+    if img is None: return None
+    success, buffer = cv2.imencode('.jpg', img)
+    return buffer.tobytes() if success else None
+
+image_files = sorted(os.listdir(IMAGE_FOLDER))
+while True:
+    for img_file in image_files:
+        if not img_file.lower().endswith(".jpg"):
+            continue
+        img_path = os.path.join(IMAGE_FOLDER, img_file)
+        encoded = encode_image(img_path)
+        if encoded:
+            producer.send(KAFKA_TOPIC, value=encoded)
+            print(f"Sent: {img_file}")
+            time.sleep(0.1)
+
+
+🔁 4. Kafka Consumer + Real-Time Sensor Metric Logging (SQLite)
+
+cd scripts
+touch kafka_image_consumer.py
+touch db_utils.py
+
+
+scripts/db_utils.py
+
+import sqlite3
+from datetime import datetime
+
+DB_PATH = r"C:\Users\Lenovo\ADAS-Sensor-Degradation\data\sensor_health.db"
+
+def create_table():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sensor_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            image_id TEXT,
+            brightness REAL,
+            contrast REAL,
+            blur REAL,
+            entropy REAL
+        )
+        """)
+        conn.commit()
+
+def insert_metrics(image_id, brightness, contrast, blur, entropy):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+            INSERT INTO sensor_metrics (timestamp, image_id, brightness, contrast, blur, entropy)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (timestamp, image_id, brightness, contrast, blur, entropy))
+        conn.commit()
+
+
+scripts/kafka_image_consumer.py
+
 import os, cv2, numpy as np
 from kafka import KafkaConsumer
+from db_utils import create_table, insert_metrics
+
+create_table()
 
 KAFKA_TOPIC = "adas_camera_stream"
 KAFKA_BROKER = "localhost:9092"
@@ -176,72 +194,39 @@ def analyze_image(image_bytes):
     contrast = gray.std()
     laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
     entropy = -np.sum((p := cv2.calcHist([gray], [0], None, [256], [0,256]).ravel() / gray.size) * np.log2(p + 1e-10))
-    return {
-        "brightness": round(brightness, 2),
-        "contrast": round(contrast, 2),
-        "blur": round(laplacian_var, 2),
-        "entropy": round(entropy, 2)
-    }
+    return brightness, contrast, laplacian_var, entropy
 
-print("[INFO] Waiting for camera stream...")
+print("[INFO] Listening to Kafka topic...")
 for message in consumer:
-    result = analyze_image(message.value)
-    if result:
-        print(result)
+    metrics = analyze_image(message.value)
+    if metrics:
+        brightness, contrast, blur, entropy = metrics
+        insert_metrics("frame", brightness, contrast, blur, entropy)
+        print(f"[LOG] -> Bright: {brightness:.2f}, Blur: {blur:.2f}")
     else:
-        print("[WARN] Skipped corrupted or unreadable frame.")
+        print("[WARN] Skipped unreadable frame")
 
 
-Run the consumer:
-python scripts/kafka_image_consumer.py
+🧩 Phase 1: Real-Time Sensor Metrics Logging (SQLite Architecture)
+This system logs visual degradation metrics (blur, brightness, contrast, entropy) extracted from front camera frames into a time-series SQLite database — built for scalable, portable sensor health analytics.
+
+🗃️ Database: sensor_health.db
+
+| Column     | Type | Description                           |
+| ---------- | ---- | ------------------------------------- |
+| timestamp  | TEXT | Frame timestamp                       |
+| image\_id  | TEXT | Frame identifier                      |
+| brightness | REAL | Average intensity (dark vs. light)    |
+| contrast   | REAL | Intensity spread (sharp vs. flat)     |
+| blur       | REAL | Laplacian variance (sharpness)        |
+| entropy    | REAL | Histogram entropy (visual complexity) |
 
 
-Expected output:
-{'brightness': 107.21, 'contrast': 42.19, 'blur': 602.38, 'entropy': 7.39}
-{'brightness': 109.58, 'contrast': 40.61, 'blur': 588.93, 'entropy': 7.35}
-...
-
-
----
-
-## 🧩 Phase 1: Real-Time Sensor Metrics Logging (SQLite Architecture)
-
-This system logs camera-based sensor health metrics in real time into a structured, queryable SQLite database — designed for high integrity, auditability, and seamless downstream processing.
-
-### 📂 Database Location
-`/data/sensor_health.db`
-
-### 🗃️ Table Schema: `sensor_metrics`
-
-| Column     | Type    | Description |
-|------------|---------|-------------|
-| id         | INTEGER | Auto-incremented record ID |
-| timestamp  | TEXT    | ISO format timestamp of frame ingestion |
-| image_id   | TEXT    | Unique identifier of the input image frame |
-| brightness | REAL    | Average pixel brightness of the frame |
-| contrast   | REAL    | Pixel intensity standard deviation |
-| blur       | REAL    | Laplacian variance (image sharpness) |
-| entropy    | REAL    | Histogram entropy (visual complexity) |
-
-### 🛠 Technologies Used
-
-- **Kafka**: Ingests camera stream in real-time from nuScenes
-- **Python OpenCV**: Extracts degradation features
-- **SQLite**: Embedded time-series database for safe logging and later retrieval
-- **Kafka Consumer**: Converts image stream to metric logs
-
-### ✅ Key Benefits
-
-- Allows multi-hour and multi-sensor traceability
-- Fully SQL-queryable (supports advanced filtering, joins, aggregation)
-- Portable and compatible with CI pipelines, Grafana dashboards, or ML model inputs
-- Can be embedded in edge devices (cars, gateways) without network reliance
-
-### 🧠 Sample SQL Query (Sensor Health Audit)
-
-```sql
+🔍 Sample Query
 SELECT * FROM sensor_metrics
 WHERE blur < 150 AND entropy < 7.0
 ORDER BY timestamp DESC
 LIMIT 10;
 
+
+✅ SQLite enables secure, reliable, and analytics-ready logging—forming the foundation for Phase 2: sensor health forecasting and drift prediction.
