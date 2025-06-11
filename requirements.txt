@@ -1,0 +1,11 @@
+torch
+numpy
+scikit-learn
+matplotlib
+fastapi
+uvicorn
+torch
+numpy
+scikit-learn
+prometheus_client
+pydantic
