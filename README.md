@@ -383,45 +383,168 @@ Access:
 bash
 Copy code
 http://localhost:8000/forecast
-📌 trial_3_fastapi_sensor_health.py
-A separate FastAPI app exposing drift metrics directly to Prometheus.
 
-Command to run:
+
+1. 📊 simulate_degradation_data.py
+Purpose: Simulate time-series sensor degradation (blur, brightness, entropy) and populate sensor_health.db.
+
+Steps:
+
+Generates synthetic metrics mimicking sensor drift over time.
+
+Appends entries into the sensor_metrics table.
+
+Output:
+
+Updated sensor_health.db with simulated data for blur, entropy, etc.
+
+2. 📦 extract_training_data.py
+Purpose: Prepare training data CSV from the SQLite database for model training.
+
+Steps:
+
+Connects to sensor_health.db.
+
+Extracts relevant metrics (e.g., blur) as time series.
+
+Saves CSV for training/testing.
+
+Output:
+
+data/lstm_training_input.csv (or similar)
+
+3. 🧠 train_lstm_forecast.py
+Purpose: Train LSTM model for future blur forecasting.
+
+Steps:
+
+Loads training CSV or DB.
+
+Normalizes data and forms input sequences.
+
+Trains LSTM (seq-to-seq) on blur data.
+
+Saves model checkpoint.
+
+Output:
+
+models/lstm_forecaster.pth
+
+4. 🧠 forecast_lstm_train.py
+Purpose: Alternate or updated version of LSTM trainer with different configs.
+
+Details:
+
+Same pipeline, possibly with different features or structure.
+
+Produces LSTM model file used for inference.
+
+5. 📈 forecast_lstm_predict.py
+Purpose: Perform forecasting with trained LSTM model.
+
+Steps:
+
+Loads lstm_forecaster.pth.
+
+Fetches latest N entries from DB.
+
+Generates M future blur predictions.
+
+Output Example:
+
+perl
+Copy code
+Forecast (next 4 blur values): [300.5, 297.1, 293.4, 288.9]
+6. 📊 forecast_visualizer.py
+Purpose: Plot forecasted vs. actual blur values.
+
+Steps:
+
+Loads actual and predicted data.
+
+Saves PNG plot.
+
+Output:
+
+data/forecast_visualization.png
+
+7. ✅ check_db_count.py
+Purpose: Sanity check to ensure DB has enough rows for training window size.
+
+Steps:
+
+Connects to sensor_health.db
+
+Prints count of available blur values
+
+Output:
+
+Console: Found 321 rows in sensor_metrics
+
+8. 🚀 one_time.py
+Purpose: Manual run to test model performance on real DB input.
+
+Usage:
+
+Load model
+
+Fetch blur values from DB
+
+Forecast and print values
+
+Purpose: Validation and debugging.
+
+9. 🚀 one_time_2.py
+Purpose: Extension of one_time.py with enhanced print/debug support or threshold check.
+
+Difference: Usually includes timestamp, formatted log output, or alerting logic.
+
+10. 🔁 auto_trigger_drift.py
+Purpose: Auto-run forecasting and drift alerting periodically.
+
+Logic:
+
+Runs every few minutes (configurable)
+
+Fetches forecast
+
+Compares with threshold (e.g., blur > 290)
+
+Logs event or prints alerts
+
+Ideal for Cron jobs / background execution
+
+11. 🌐 trial3_fastapi_monitor.py
+Purpose: Run a FastAPI service that returns sensor forecasts as JSON.
+
+Usage:
 
 bash
 Copy code
-uvicorn scripts.trial_3_fastapi_sensor_health:app --reload --port 9100
-Metrics format:
+uvicorn scripts.trial3_fastapi_monitor:app --reload --port 8000
+Endpoint:
 
-nginx
+http
 Copy code
-# HELP sensor_forecast_blur Forecasted sensor blur
-# TYPE sensor_forecast_blur gauge
-sensor_forecast_blur 289.72
-📌 auto_trigger_drift.py
-Periodically queries http://localhost:8000/forecast
+GET /forecast
+Response:
 
-Compares the forecasted metric (e.g. blur) with a defined threshold
-
-Logs “DRIFT DETECTED” only on transition to drift state
-
-Suppresses repeated alerts unless state changes back to normal
-
-Sample logic:
-
-python
+json
 Copy code
-if forecast_value < threshold and not drift_logged:
-    print("DRIFT DETECTED")
-    drift_logged = True
-elif forecast_value >= threshold:
-    drift_logged = False
-Command to run:
+{
+  "metric": "blur",
+  "forecast": [290.4, 288.9, 286.1],
+  "timestamp": "2025-06-12T12:30:00"
+}
+12. 📊 trial2_drift_detection.py
+Purpose: Evaluate drift by comparing reference and live metric windows.
 
+Approach:
 
-python scripts/auto_trigger_drift.py
+Load old reference window from DB.
 
-Script	Role
-trial3_fastapi_monitor.py	Forecast via REST API (localhost:8000)
-trial_3_fastapi_sensor_health.py	Forecast metric as Prometheus gauge (localhost:9100)
-auto_trigger_drift.py	Drift threshold checker that pulls from FastAPI and logs events
+Compare to latest blur values using statistical distance or difference.
+
+Returns drift flag.
+
+Ideal for: Adding statistical drift detection in Prometheus or FastAPI.
