@@ -367,4 +367,61 @@ Compares reference & live window
 
 Uses statistical drift measures
 
-Generates dashboard-ready HTML report
+🔁 🧪 Trial 3: FastAPI + Prometheus + Auto Trigger Combined Monitoring
+📌 trial3_fastapi_monitor.py
+A lightweight FastAPI app exposing predicted sensor health as JSON.
+
+Acts as a REST endpoint for external systems or local monitoring.
+
+Command to run:
+
+bash
+Copy code
+uvicorn scripts.trial3_fastapi_monitor:app --reload --port 8000
+Access:
+
+bash
+Copy code
+http://localhost:8000/forecast
+📌 trial_3_fastapi_sensor_health.py
+A separate FastAPI app exposing drift metrics directly to Prometheus.
+
+Command to run:
+
+bash
+Copy code
+uvicorn scripts.trial_3_fastapi_sensor_health:app --reload --port 9100
+Metrics format:
+
+nginx
+Copy code
+# HELP sensor_forecast_blur Forecasted sensor blur
+# TYPE sensor_forecast_blur gauge
+sensor_forecast_blur 289.72
+📌 auto_trigger_drift.py
+Periodically queries http://localhost:8000/forecast
+
+Compares the forecasted metric (e.g. blur) with a defined threshold
+
+Logs “DRIFT DETECTED” only on transition to drift state
+
+Suppresses repeated alerts unless state changes back to normal
+
+Sample logic:
+
+python
+Copy code
+if forecast_value < threshold and not drift_logged:
+    print("DRIFT DETECTED")
+    drift_logged = True
+elif forecast_value >= threshold:
+    drift_logged = False
+Command to run:
+
+
+python scripts/auto_trigger_drift.py
+
+Script	Role
+trial3_fastapi_monitor.py	Forecast via REST API (localhost:8000)
+trial_3_fastapi_sensor_health.py	Forecast metric as Prometheus gauge (localhost:9100)
+auto_trigger_drift.py	Drift threshold checker that pulls from FastAPI and logs events
