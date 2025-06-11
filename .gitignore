@@ -7,4 +7,6 @@ __pycache__/
 .idea/
 .DS_Store
 .env
-
+data/nuscenes/
+grafana
+prometheus
