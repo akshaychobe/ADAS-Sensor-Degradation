@@ -230,3 +230,141 @@ LIMIT 10;
 
 
 ✅ SQLite enables secure, reliable, and analytics-ready logging—forming the foundation for Phase 2: sensor health forecasting and drift prediction.
+🔮 Phase 2: Sensor Health Forecasting & Drift Monitoring
+This phase extends Phase 1 with predictive modeling (LSTM), live monitoring (FastAPI + Prometheus), alerting mechanisms, and lays the groundwork for Grafana dashboards.
+
+📷 Architecture Visuals
+Figure_1.png: Block diagram representing the end-to-end architecture.
+
+forecast_visualization.png: Line plot comparing predicted vs. actual values.
+
+🧠 LSTM Forecasting Pipeline
+1. Training the Forecast Model
+Script: scripts/train_lstm_forecast.py
+Input: sensor_health.db
+Output: models/lstm_forecaster.pth
+
+Steps:
+
+Load SQLite blur time-series
+
+Normalize data
+
+Create sliding window sequences
+
+Train LSTM
+
+Save model
+
+2. Forecasting Future Drift
+Script: scripts/forecast_lstm_predict.py
+
+Loads trained .pth model
+
+Fetches latest metrics
+
+Predicts future blur values
+
+Logs predictions
+
+3. Plotting Forecasts
+Script: scripts/forecast_visualizer.py
+
+Plots predicted vs actual
+
+Saves to forecast_visualization.png
+
+🔁 One-Time Utilities
+extract_training_data.py: Dumps training CSV from database
+
+one_time.py, one_time_2.py: Debug runs for model validation
+
+check_db_count.py: Confirms row count for training window
+
+🌐 FastAPI Integration
+Health API (JSON Output)
+Script: scripts/trial3_fastapi_monitor.py
+
+Start:
+
+bash
+Copy code
+uvicorn scripts.trial3_fastapi_monitor:app --reload --port 8000
+Example endpoint:
+
+bash
+Copy code
+http://localhost:8000/forecast
+Returns:
+
+json
+Copy code
+{
+  "metric": "blur",
+  "forecast": [300.1, 298.6, 294.7],
+  "timestamp": "2025-06-11T15:20:00"
+}
+📊 Prometheus Integration
+Sensor Forecast Exposure
+Script: scripts/trial_3_fastapi_sensor_health.py
+Start:
+
+bash
+Copy code
+uvicorn scripts.trial_3_fastapi_sensor_health:app --reload --port 9100
+Metrics exposed:
+
+nginx
+Copy code
+sensor_forecast_blur 292.1
+sensor_entropy_drift 0.00
+Prometheus Setup
+Prometheus YAML: prometheus/prometheus.yml
+
+yaml
+Copy code
+scrape_configs:
+  - job_name: 'sensor_forecast_monitor'
+    static_configs:
+      - targets: ['localhost:9100']
+Run Prometheus:
+
+bash
+Copy code
+cd prometheus
+./prometheus --config.file=prometheus.yml
+Verify at:
+
+arduino
+Copy code
+http://localhost:9090
+⚠️ Auto Triggering Drift Alerts
+Script: scripts/auto_trigger_drift.py
+
+Auto-queries prediction endpoint
+
+Compares with threshold
+
+Detects & logs drift events
+
+One drift log per event (avoids spamming)
+
+🧪 Drift Detection Trials
+Trial 1: Threshold-Based Alerts
+Script: scripts/trial_1_drift_threshold_alert.py
+
+Reads metrics from DB
+
+Triggers alerts on static threshold
+
+Simple yet effective baseline
+
+Trial 2: Evidently-Based Drift Reports
+Script: scripts/trial_2_drift_evidently.py
+Output: scripts/trial_2_drift_report.html
+
+Compares reference & live window
+
+Uses statistical drift measures
+
+Generates dashboard-ready HTML report
