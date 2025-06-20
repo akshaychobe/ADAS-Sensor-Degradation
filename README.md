@@ -6,12 +6,12 @@ This project simulates a real-time ADAS camera stream using the nuScenes dataset
 
 ## 📦 Project Overview
 
-| Phase        | Functionality                                     | Technologies                           |
-|--------------|---------------------------------------------------|----------------------------------------|
-| Phase 1      | Real-time sensor image ingestion + metric logging | Kafka, OpenCV, SQLite                  |
-| Phase 2      | Forecast sensor health degradation                | PyTorch, LSTM/Transformer              |
-| Phase 3      | Trigger drift detection & retraining              | Evidently, Airflow, FastAPI            |
-| Phase 4      | Expose health endpoint for live dashboarding      | FastAPI, SQLite                        |
+| Phase   | Functionality                                     | Technologies                           |
+|---------|---------------------------------------------------|----------------------------------------|
+| Phase 1 | Real-time sensor image ingestion + metric logging | Kafka, OpenCV, SQLite                  |
+| Phase 2 | Forecast sensor health degradation                | PyTorch, LSTM/Transformer              |
+| Phase 3 | Trigger drift detection & retraining              | Evidently, Airflow, FastAPI            |
+| Phase 4 | Expose health endpoint for live dashboarding      | FastAPI, SQLite                        |
 
 ---
 
@@ -33,20 +33,21 @@ touch data/.gitkeep scripts/.gitkeep models/.gitkeep kafka/.gitkeep pipeline/.gi
 git add .
 git commit -m "Initial folder structure and base files"
 git push
+```
 
+---
 
 ## 🐳 2. Kafka + Zookeeper Setup (via Docker)
 
+```bash
 cd kafka
-
-# docker-compose.yml for Kafka + Zookeeper
 docker compose up -d
 docker ps
+```
 
+`docker-compose.yml`:
 
-docker-compose.yml
-
-
+```yaml
 version: '3.8'
 services:
   zookeeper:
@@ -68,32 +69,35 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+```
 
+---
 
-📡 3. Kafka Producer — Stream nuScenes Camera Images
-Dataset Setup
+## 📡 3. Kafka Producer — Stream nuScenes Camera Images
 
+### Dataset Setup
+
+```bash
 cd data
 mkdir nuscenes
 cd nuscenes
 
 # Download manually from https://www.nuscenes.org/download
 # File: v1.0-mini.tgz
-
 tar -xvzf v1.0-mini.tgz
+```
 
+### Kafka Image Producer Setup
 
-Kafka Image Producer Setup
-
+```bash
 cd scripts
 touch kafka_image_producer.py
-
-# Install required libraries
 pip install kafka-python opencv-python
+```
 
+`scripts/kafka_image_producer.py`
 
-scripts/kafka_image_producer.py
-
+```python
 import os, cv2, time
 from kafka import KafkaProducer
 
@@ -123,17 +127,21 @@ while True:
             producer.send(KAFKA_TOPIC, value=encoded)
             print(f"Sent: {img_file}")
             time.sleep(0.1)
+```
 
+---
 
-🔁 4. Kafka Consumer + Real-Time Sensor Metric Logging (SQLite)
+## 🔁 4. Kafka Consumer + Real-Time Sensor Metric Logging (SQLite)
 
+```bash
 cd scripts
 touch kafka_image_consumer.py
 touch db_utils.py
+```
 
+`scripts/db_utils.py`
 
-scripts/db_utils.py
-
+```python
 import sqlite3
 from datetime import datetime
 
@@ -164,10 +172,11 @@ def insert_metrics(image_id, brightness, contrast, blur, entropy):
             VALUES (?, ?, ?, ?, ?, ?)
         """, (timestamp, image_id, brightness, contrast, blur, entropy))
         conn.commit()
+```
 
+`scripts/kafka_image_consumer.py`
 
-scripts/kafka_image_consumer.py
-
+```python
 import os, cv2, numpy as np
 from kafka import KafkaConsumer
 from db_utils import create_table, insert_metrics
@@ -205,346 +214,32 @@ for message in consumer:
         print(f"[LOG] -> Bright: {brightness:.2f}, Blur: {blur:.2f}")
     else:
         print("[WARN] Skipped unreadable frame")
+```
 
+---
 
-🧩 Phase 1: Real-Time Sensor Metrics Logging (SQLite Architecture)
+## 🧩 Phase 1: Real-Time Sensor Metrics Logging (SQLite Architecture)
+
 This system logs visual degradation metrics (blur, brightness, contrast, entropy) extracted from front camera frames into a time-series SQLite database — built for scalable, portable sensor health analytics.
 
-🗃️ Database: sensor_health.db
+### 🗃️ Database: `sensor_health.db`
 
 | Column     | Type | Description                           |
-| ---------- | ---- | ------------------------------------- |
+|------------|------|---------------------------------------|
 | timestamp  | TEXT | Frame timestamp                       |
-| image\_id  | TEXT | Frame identifier                      |
+| image_id   | TEXT | Frame identifier                      |
 | brightness | REAL | Average intensity (dark vs. light)    |
 | contrast   | REAL | Intensity spread (sharp vs. flat)     |
 | blur       | REAL | Laplacian variance (sharpness)        |
 | entropy    | REAL | Histogram entropy (visual complexity) |
 
+### 🔍 Sample Query
 
-🔍 Sample Query
+```sql
 SELECT * FROM sensor_metrics
 WHERE blur < 150 AND entropy < 7.0
 ORDER BY timestamp DESC
 LIMIT 10;
-
+```
 
 ✅ SQLite enables secure, reliable, and analytics-ready logging—forming the foundation for Phase 2: sensor health forecasting and drift prediction.
-🔮 Phase 2: Sensor Health Forecasting & Drift Monitoring
-This phase extends Phase 1 with predictive modeling (LSTM), live monitoring (FastAPI + Prometheus), alerting mechanisms, and lays the groundwork for Grafana dashboards.
-
-📷 Architecture Visuals
-Figure_1.png: Block diagram representing the end-to-end architecture.
-
-forecast_visualization.png: Line plot comparing predicted vs. actual values.
-
-🧠 LSTM Forecasting Pipeline
-1. Training the Forecast Model
-Script: scripts/train_lstm_forecast.py
-Input: sensor_health.db
-Output: models/lstm_forecaster.pth
-
-Steps:
-
-Load SQLite blur time-series
-
-Normalize data
-
-Create sliding window sequences
-
-Train LSTM
-
-Save model
-
-2. Forecasting Future Drift
-Script: scripts/forecast_lstm_predict.py
-
-Loads trained .pth model
-
-Fetches latest metrics
-
-Predicts future blur values
-
-Logs predictions
-
-3. Plotting Forecasts
-Script: scripts/forecast_visualizer.py
-
-Plots predicted vs actual
-
-Saves to forecast_visualization.png
-
-🔁 One-Time Utilities
-extract_training_data.py: Dumps training CSV from database
-
-one_time.py, one_time_2.py: Debug runs for model validation
-
-check_db_count.py: Confirms row count for training window
-
-🌐 FastAPI Integration
-Health API (JSON Output)
-Script: scripts/trial3_fastapi_monitor.py
-
-Start:
-
-bash
-Copy code
-uvicorn scripts.trial3_fastapi_monitor:app --reload --port 8000
-Example endpoint:
-
-bash
-Copy code
-http://localhost:8000/forecast
-Returns:
-
-json
-Copy code
-{
-  "metric": "blur",
-  "forecast": [300.1, 298.6, 294.7],
-  "timestamp": "2025-06-11T15:20:00"
-}
-📊 Prometheus Integration
-Sensor Forecast Exposure
-Script: scripts/trial_3_fastapi_sensor_health.py
-Start:
-
-bash
-Copy code
-uvicorn scripts.trial_3_fastapi_sensor_health:app --reload --port 9100
-Metrics exposed:
-
-nginx
-Copy code
-sensor_forecast_blur 292.1
-sensor_entropy_drift 0.00
-Prometheus Setup
-Prometheus YAML: prometheus/prometheus.yml
-
-yaml
-Copy code
-scrape_configs:
-  - job_name: 'sensor_forecast_monitor'
-    static_configs:
-      - targets: ['localhost:9100']
-Run Prometheus:
-
-bash
-Copy code
-cd prometheus
-./prometheus --config.file=prometheus.yml
-Verify at:
-
-arduino
-Copy code
-http://localhost:9090
-⚠️ Auto Triggering Drift Alerts
-Script: scripts/auto_trigger_drift.py
-
-Auto-queries prediction endpoint
-
-Compares with threshold
-
-Detects & logs drift events
-
-One drift log per event (avoids spamming)
-
-🧪 Drift Detection Trials
-Trial 1: Threshold-Based Alerts
-Script: scripts/trial_1_drift_threshold_alert.py
-
-Reads metrics from DB
-
-Triggers alerts on static threshold
-
-Simple yet effective baseline
-
-Trial 2: Evidently-Based Drift Reports
-Script: scripts/trial_2_drift_evidently.py
-Output: scripts/trial_2_drift_report.html
-
-Compares reference & live window
-
-Uses statistical drift measures
-
-🔁 🧪 Trial 3: FastAPI + Prometheus + Auto Trigger Combined Monitoring
-📌 trial3_fastapi_monitor.py
-A lightweight FastAPI app exposing predicted sensor health as JSON.
-
-Acts as a REST endpoint for external systems or local monitoring.
-
-Command to run:
-
-bash
-Copy code
-uvicorn scripts.trial3_fastapi_monitor:app --reload --port 8000
-Access:
-
-bash
-Copy code
-http://localhost:8000/forecast
-
-
-1. 📊 simulate_degradation_data.py
-Purpose: Simulate time-series sensor degradation (blur, brightness, entropy) and populate sensor_health.db.
-
-Steps:
-
-Generates synthetic metrics mimicking sensor drift over time.
-
-Appends entries into the sensor_metrics table.
-
-Output:
-
-Updated sensor_health.db with simulated data for blur, entropy, etc.
-
-2. 📦 extract_training_data.py
-Purpose: Prepare training data CSV from the SQLite database for model training.
-
-Steps:
-
-Connects to sensor_health.db.
-
-Extracts relevant metrics (e.g., blur) as time series.
-
-Saves CSV for training/testing.
-
-Output:
-
-data/lstm_training_input.csv (or similar)
-
-3. 🧠 train_lstm_forecast.py
-Purpose: Train LSTM model for future blur forecasting.
-
-Steps:
-
-Loads training CSV or DB.
-
-Normalizes data and forms input sequences.
-
-Trains LSTM (seq-to-seq) on blur data.
-
-Saves model checkpoint.
-
-Output:
-
-models/lstm_forecaster.pth
-
-4. 🧠 forecast_lstm_train.py
-Purpose: Alternate or updated version of LSTM trainer with different configs.
-
-Details:
-
-Same pipeline, possibly with different features or structure.
-
-Produces LSTM model file used for inference.
-
-5. 📈 forecast_lstm_predict.py
-Purpose: Perform forecasting with trained LSTM model.
-
-Steps:
-
-Loads lstm_forecaster.pth.
-
-Fetches latest N entries from DB.
-
-Generates M future blur predictions.
-
-Output Example:
-
-perl
-Copy code
-Forecast (next 4 blur values): [300.5, 297.1, 293.4, 288.9]
-6. 📊 forecast_visualizer.py
-Purpose: Plot forecasted vs. actual blur values.
-
-Steps:
-
-Loads actual and predicted data.
-
-Saves PNG plot.
-
-Output:
-
-data/forecast_visualization.png
-
-7. ✅ check_db_count.py
-Purpose: Sanity check to ensure DB has enough rows for training window size.
-
-Steps:
-
-Connects to sensor_health.db
-
-Prints count of available blur values
-
-Output:
-
-Console: Found 321 rows in sensor_metrics
-
-8. 🚀 one_time.py
-Purpose: Manual run to test model performance on real DB input.
-
-Usage:
-
-Load model
-
-Fetch blur values from DB
-
-Forecast and print values
-
-Purpose: Validation and debugging.
-
-9. 🚀 one_time_2.py
-Purpose: Extension of one_time.py with enhanced print/debug support or threshold check.
-
-Difference: Usually includes timestamp, formatted log output, or alerting logic.
-
-10. 🔁 auto_trigger_drift.py
-Purpose: Auto-run forecasting and drift alerting periodically.
-
-Logic:
-
-Runs every few minutes (configurable)
-
-Fetches forecast
-
-Compares with threshold (e.g., blur > 290)
-
-Logs event or prints alerts
-
-Ideal for Cron jobs / background execution
-
-11. 🌐 trial3_fastapi_monitor.py
-Purpose: Run a FastAPI service that returns sensor forecasts as JSON.
-
-Usage:
-
-bash
-Copy code
-uvicorn scripts.trial3_fastapi_monitor:app --reload --port 8000
-Endpoint:
-
-http
-Copy code
-GET /forecast
-Response:
-
-json
-Copy code
-{
-  "metric": "blur",
-  "forecast": [290.4, 288.9, 286.1],
-  "timestamp": "2025-06-12T12:30:00"
-}
-12. 📊 trial2_drift_detection.py
-Purpose: Evaluate drift by comparing reference and live metric windows.
-
-Approach:
-
-Load old reference window from DB.
-
-Compare to latest blur values using statistical distance or difference.
-
-Returns drift flag.
-
-Ideal for: Adding statistical drift detection in Prometheus or FastAPI.
