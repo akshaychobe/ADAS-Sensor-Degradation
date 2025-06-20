@@ -502,42 +502,6 @@ Runs in background and:
 
 ---
 
-## 🔁 Folder Overview
-
-```
-📁 data/
-   ├── sensor_health.db
-   ├── forecast_visualization.png
-   └── image_quality_metrics.csv
-
-📁 models/
-   └── lstm_forecaster.pth
-
-📁 scripts/
-   ├── simulate_degradation_data.py
-   ├── extract_training_data.py
-   ├── train_lstm_forecast.py
-   ├── forecast_lstm_predict.py
-   ├── forecast_visualizer.py
-   ├── one_time.py
-   ├── one_time_2.py
-   ├── auto_trigger_drift.py
-   ├── trial3_fastapi_monitor.py
-   ├── trial_3_fastapi_sensor_health.py
-   ├── trial_1_drift_threshold_alert.py
-   ├── trial_2_drift_evidently.py
-   ├── check_db_count.py
-   └── db_utils.py
-
-📁 prometheus/
-   └── prometheus.yml
-
-📁 grafana/
-   └── grafana-server.exe (excluded from Git)
-```
-
----
-
 ## ✅ Requirements
 
 ```bash
