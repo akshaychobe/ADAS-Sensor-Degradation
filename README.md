@@ -785,7 +785,207 @@ ADAS-Sensor-Degradation/
 ```
 
 ---
+---
 
-Next: **Phase 4 - Dashboard Deployment + CI/CD Automation**
+## 📊 Phase 4: Real-Time Visualization with Grafana
 
-Let me know if you want that section continued next.
+This final phase allows us to visualize drift predictions, metric trends, and model behavior via Grafana dashboards in real time — built on FastAPI + Prometheus architecture.
+
+---
+
+### 📌 Why Grafana?
+
+- Grafana connects directly to Prometheus
+- Supports live graphs, alerts, and dashboards
+- Lightweight and portable (runs locally)
+
+---
+
+## 🖥️ Grafana Installation (Windows)
+
+1. Download from [https://grafana.com/grafana/download](https://grafana.com/grafana/download)
+   - Choose **Windows > ZIP version**
+
+2. Extract to:
+   ```
+   C:\Users\Lenovo\ADAS-Sensor-Degradation\grafana-12.0.2.windows-amd64
+   ```
+
+3. Launch Grafana:
+   ```bash
+   cd grafana-12.0.2.windows-amd64\bin
+   grafana-server.exe
+   ```
+
+4. Access in browser:
+   ```
+   http://localhost:3000
+   ```
+
+---
+
+## 🔐 Default Grafana Credentials
+
+| Username | Password  |
+|----------|-----------|
+| admin    | admin     |
+
+Change password on first login.
+
+---
+
+## 🔧 Configure Prometheus as Data Source
+
+1. Go to **Gear Icon > Data Sources**
+2. Click **Add data source**
+3. Choose **Prometheus**
+4. URL: `http://localhost:9090`
+5. Click **Save & Test**
+
+---
+
+## 📈 Create Dashboard
+
+1. Go to **+ > Dashboard > New Panel**
+2. In "Query":
+   - Select Metric: `sensor_forecast_blur`
+3. Choose "Time series" visualization
+4. Click **Apply**
+
+Repeat for:
+- `sensor_brightness_drift`
+- `sensor_entropy_drift`
+- `sensor_contrast_drift`
+
+---
+
+## 🎯 Customize Panels
+
+Each panel can display:
+- Predicted blur values over time
+- Brightness/contrast trend
+- Entropy deviation
+
+Add titles, legends, and time ranges as needed.
+
+---
+
+## ⚠️ Alerting (Optional)
+
+Set up **alerts** on panels:
+- If `sensor_forecast_blur > 290`, send alert
+- Email, webhook, or Slack supported (if configured)
+
+---
+
+## 🧪 Live Monitoring Endpoint
+
+FastAPI provides JSON output at:
+
+```
+http://localhost:8000/forecast
+```
+
+Returns:
+
+```json
+{
+  "metric": "blur",
+  "forecast": [295.0, 293.7, 291.2],
+  "timestamp": "2025-06-20T18:45:00"
+}
+```
+
+Prometheus fetches from:
+
+```
+http://localhost:8000/metrics
+```
+
+Sample Metrics:
+
+```
+sensor_blur_drift 38.29
+sensor_brightness_drift 92.5
+sensor_entropy_drift 0.12
+```
+
+---
+
+## 🔁 Prometheus Scrape Config
+
+Edit `prometheus/prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'sensor-drift-monitor'
+    static_configs:
+      - targets: ['localhost:8000']
+```
+
+Launch Prometheus:
+
+```bash
+cd prometheus
+./prometheus --config.file=prometheus.yml
+```
+
+Access: [http://localhost:9090](http://localhost:9090)
+
+---
+
+## ✅ Final End-to-End Flow
+
+```
+Kafka Producer (images) ➝ Kafka Consumer
+ ➝ SQLite logging ➝ LSTM model ➝ Prediction
+ ➝ FastAPI JSON + Prometheus metrics ➝ Grafana dashboard
+```
+
+---
+
+## 💡 Future Work
+
+| Task                            | Description                                             |
+|----------------------------------|---------------------------------------------------------|
+| CI/CD with GitHub Actions        | Auto-test model, API on push                           |
+| Dockerize whole pipeline         | Use Docker Compose for Prometheus + API + Kafka        |
+| Add Prometheus alerts            | Trigger on threshold breaches                          |
+| Integrate Evidently in Grafana   | Convert Evidently HTML reports to live Prometheus stats|
+| Use ONNX for model deployment    | Convert PyTorch model to ONNX for faster inference     |
+| Sensor fusion forecasting        | Add LiDAR or radar streams for better predictions      |
+
+---
+
+## 🚀 Recommended Project Repo Structure
+
+```
+ADAS-Sensor-Degradation/
+├── data/                  # SQLite DB, CSV, PNG outputs
+├── models/                # LSTM .pth model
+├── scripts/               # Kafka, API, forecast, utils
+├── prometheus/            # Prometheus config
+├── grafana/               # Grafana config files (NO BINARIES)
+├── kafka/                 # docker-compose.yml
+├── notebooks/             # (Optional) Jupyter experiments
+├── requirements.txt
+├── README.md
+├── .gitignore
+```
+
+---
+
+## 🧾 License
+
+This project is licensed under the MIT License - see the `LICENSE` file for details.
+
+---
+
+## 🙌 Acknowledgements
+
+- [nuScenes Dataset](https://www.nuscenes.org/)
+- [Grafana Labs](https://grafana.com/)
+- [Prometheus](https://prometheus.io/)
+- [EvidentlyAI](https://www.evidentlyai.com/)
+- [PyTorch](https://pytorch.org/)
+- [Kafka](https://kafka.apache.org/)
