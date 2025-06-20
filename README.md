@@ -243,3 +243,314 @@ LIMIT 10;
 ```
 
 ✅ SQLite enables secure, reliable, and analytics-ready logging—forming the foundation for Phase 2: sensor health forecasting and drift prediction.
+
+
+---
+
+## 🔮 Phase 2: Sensor Health Forecasting & Drift Monitoring
+
+This phase extends Phase 1 with predictive modeling (LSTM), live monitoring (FastAPI + Prometheus), and drift alerting, laying the groundwork for real-time dashboards.
+
+---
+
+### 📷 Architecture Visuals
+
+- `Figure_1.png`: Block diagram showing entire architecture
+- `data/forecast_visualization.png`: Forecast vs. actual drift plots
+
+---
+
+## 🧠 LSTM Forecasting Pipeline
+
+### 1. 📊 Simulate Degradation Data
+
+**Script**: `scripts/simulate_degradation_data.py`
+
+Generates synthetic sensor data (blur, brightness, entropy) to populate the database:
+
+```bash
+python scripts/simulate_degradation_data.py
+```
+
+Effect:
+- Adds realistic time-series degradation into `sensor_metrics` table
+- Helps train & test forecasting logic
+
+---
+
+### 2. 📦 Extract Training Data
+
+**Script**: `scripts/extract_training_data.py`
+
+Pulls past sensor metrics and exports CSV:
+
+```bash
+python scripts/extract_training_data.py
+```
+
+Output:
+- `data/image_quality_metrics.csv`
+
+---
+
+### 3. 🧠 Train LSTM Forecast Model
+
+**Script**: `scripts/train_lstm_forecast.py`
+
+Trains a sequence-to-sequence LSTM model on sensor blur values:
+
+```bash
+python scripts/train_lstm_forecast.py
+```
+
+Output:
+- `models/lstm_forecaster.pth`
+
+---
+
+### 4. 📈 Forecast Future Drift
+
+**Script**: `scripts/forecast_lstm_predict.py`
+
+Predicts future sensor values:
+
+```bash
+python scripts/forecast_lstm_predict.py
+```
+
+Example Output:
+```text
+Forecast (next 4 blur values): [302.1, 298.6, 294.3, 289.0]
+```
+
+---
+
+### 5. 📊 Visualize Forecast
+
+**Script**: `scripts/forecast_visualizer.py`
+
+Draws forecast vs. actual:
+
+```bash
+python scripts/forecast_visualizer.py
+```
+
+Output:
+- `data/forecast_visualization.png`
+
+---
+
+### 6. ✅ Check DB for Enough Samples
+
+**Script**: `scripts/check_db_count.py`
+
+Verifies if `sensor_health.db` has enough rows:
+
+```bash
+python scripts/check_db_count.py
+```
+
+---
+
+### 7. 🚀 One-Time Forecast Debug Runs
+
+| Script                | Purpose                               |
+|-----------------------|---------------------------------------|
+| `one_time.py`         | Prints prediction from latest blur    |
+| `one_time_2.py`       | Logs result with timestamp/thresholds |
+
+---
+
+## 🌐 FastAPI Forecast Service (JSON API)
+
+**Script**: `scripts/trial3_fastapi_monitor.py`
+
+```bash
+uvicorn scripts.trial3_fastapi_monitor:app --reload --port 8000
+```
+
+Then open in browser:
+
+```
+http://localhost:8000/forecast
+```
+
+**Returns:**
+
+```json
+{
+  "metric": "blur",
+  "forecast": [290.4, 288.9, 286.1],
+  "timestamp": "2025-06-12T12:30:00"
+}
+```
+
+---
+
+## 📊 Prometheus Integration (Sensor Drift Metrics)
+
+**Script**: `scripts/trial_3_fastapi_sensor_health.py`
+
+Start server:
+
+```bash
+uvicorn scripts/trial_3_fastapi_sensor_health:app --reload --port 8000
+```
+
+Open Prometheus browser:
+
+```
+http://localhost:9090
+```
+
+Sample metrics at `http://localhost:8000/metrics`:
+
+```
+sensor_forecast_blur 298.45
+sensor_entropy_drift 0.01
+sensor_brightness_drift 7.93
+```
+
+---
+
+### ⚙️ Prometheus Config (scraping FastAPI)
+
+**File**: `prometheus/prometheus.yml`
+
+```yaml
+scrape_configs:
+  - job_name: 'sensor-drift-monitor'
+    static_configs:
+      - targets: ['localhost:8000']
+```
+
+Run Prometheus:
+
+```bash
+cd prometheus
+./prometheus --config.file=prometheus.yml
+```
+
+---
+
+## 📈 Grafana Setup (Live Dashboards)
+
+### 1. Download and unzip Grafana
+- Use: [https://grafana.com/grafana/download](https://grafana.com/grafana/download)
+- Extract and run:
+
+```bash
+cd grafana/grafana-v12.0.x/bin
+grafana-server.exe
+```
+
+### 2. Open browser:
+```
+http://localhost:3000
+```
+Default Login: `admin` / `admin`
+
+### 3. Add Prometheus as data source:
+- Type: **Prometheus**
+- URL: `http://localhost:9090`
+- Save & Test
+
+### 4. Create dashboard panel
+- Panel → Query → `sensor_forecast_blur`
+- Visualization → Time Series
+- Save Dashboard
+
+---
+
+## 🚨 Auto Trigger Drift Detection
+
+**Script**: `scripts/auto_trigger_drift.py`
+
+Runs in background and:
+- Pulls predictions
+- Compares with thresholds
+- Logs alert if drift detected
+
+---
+
+## 🧪 Drift Detection Trials
+
+### ✅ Trial 1: Static Thresholds
+
+**Script**: `scripts/trial_1_drift_threshold_alert.py`
+
+- Compare against manually defined thresholds (e.g., blur > 290)
+- Logs alert in console
+
+---
+
+### 📊 Trial 2: Evidently Report
+
+**Script**: `scripts/trial_2_drift_evidently.py`
+
+- Generates HTML drift report
+- Output: `scripts/trial_2_drift_report.html`
+
+---
+
+### 🧠 Trial 3: Combined Monitoring API
+
+**Script**: `scripts/trial3_fastapi_monitor.py`
+
+- Combines prediction and Prometheus exposure
+- Lightweight JSON + /metrics API
+
+---
+
+## 🔁 Folder Overview
+
+```
+📁 data/
+   ├── sensor_health.db
+   ├── forecast_visualization.png
+   └── image_quality_metrics.csv
+
+📁 models/
+   └── lstm_forecaster.pth
+
+📁 scripts/
+   ├── simulate_degradation_data.py
+   ├── extract_training_data.py
+   ├── train_lstm_forecast.py
+   ├── forecast_lstm_predict.py
+   ├── forecast_visualizer.py
+   ├── one_time.py
+   ├── one_time_2.py
+   ├── auto_trigger_drift.py
+   ├── trial3_fastapi_monitor.py
+   ├── trial_3_fastapi_sensor_health.py
+   ├── trial_1_drift_threshold_alert.py
+   ├── trial_2_drift_evidently.py
+   ├── check_db_count.py
+   └── db_utils.py
+
+📁 prometheus/
+   └── prometheus.yml
+
+📁 grafana/
+   └── grafana-server.exe (excluded from Git)
+```
+
+---
+
+## ✅ Requirements
+
+```bash
+pip install -r requirements.txt
+```
+
+Dependencies:
+- kafka-python
+- opencv-python
+- numpy
+- fastapi
+- uvicorn
+- sqlite3
+- torch
+- matplotlib
+- evidently
