@@ -1,12 +1,32 @@
-.venv/
-__pycache__/
-*.pyc
 *.pkl
-*.log
 *.npz
 .idea/
 .DS_Store
-.env
 data/nuscenes/
-grafana
-prometheus
+# Ignore heavy binaries
+grafana/grafana-v12.0.1/bin/grafana.exe
+grafana/grafana-v12.0.1/bin/grafana-server.exe
+grafana/grafana-v12.0.1/bin/grafana-cli.exe
+
+# Datasets and Models
+data/sensor_health.db
+data/image_quality_metrics.csv
+data/forecast_visualization.png
+models/
+
+# Logs, Cache, Temp
+*.log
+*.tmp
+__pycache__/
+*.pyc
+
+# System files
+.DS_Store
+Thumbs.db
+
+# venv
+.venv/
+.env
+
+# OS-specific
+*.zip
