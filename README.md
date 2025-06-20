@@ -554,3 +554,238 @@ Dependencies:
 - torch
 - matplotlib
 - evidently
+
+
+
+---
+
+## 🔁 Phase 3: Sensor Retraining + Automation Pipeline
+
+This phase introduces model retraining logic and background scheduling tools to keep the system robust over time.
+
+---
+
+### 📌 Why Retrain?
+
+- Over time, real-world sensor drift may evolve
+- Models trained on older data may lose accuracy
+- Periodic retraining ensures:
+  - ✅ Adaptability to new patterns
+  - ✅ Better forecast accuracy
+  - ✅ Fewer false alerts
+
+---
+
+## ⚙️ Retraining Strategy
+
+### 1. Update Data with Latest Window
+
+Use already ingested metrics (via Kafka + SQLite) to:
+- Pull recent sensor blur values
+- Extract clean segments (no drift)
+- Update CSV or input for training
+
+```bash
+python scripts/extract_training_data.py
+```
+
+---
+
+### 2. Train Updated Model
+
+Re-run the training logic on new clean segments:
+
+```bash
+python scripts/train_lstm_forecast.py
+```
+
+Or use improved version with validation logic:
+
+```bash
+python scripts/forecast_lstm_train.py
+```
+
+Result:
+- Updated `models/lstm_forecaster.pth` (used in live forecast)
+
+---
+
+## 🧪 Drift Feedback Loop
+
+If too many drift events are triggered (via `auto_trigger_drift.py`):
+- Analyze DB using SQLite
+- Identify stable windows
+- Use them for retraining
+
+---
+
+## ⏱️ Background Scheduling Options
+
+To automate retraining or drift-checking:
+
+### 1. Use Python + `schedule` or `APScheduler`
+
+```python
+import schedule
+import time
+from subprocess import call
+
+def retrain_job():
+    call(['python', 'scripts/train_lstm_forecast.py'])
+
+schedule.every().day.at("02:00").do(retrain_job)
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
+```
+
+---
+
+### 2. Use Windows Task Scheduler
+
+Schedule any `.bat` file to run every night:
+
+```bat
+@echo off
+cd C:\Users\Lenovo\ADAS-Sensor-Degradation
+python scripts/train_lstm_forecast.py
+```
+
+---
+
+### 3. Use Cron (on Linux)
+
+Add to crontab:
+
+```bash
+0 2 * * * cd /path/to/project && python3 scripts/train_lstm_forecast.py
+```
+
+---
+
+## 🧠 Phase 3 Summary
+
+| Task                    | Script                          | Purpose                             |
+|-------------------------|----------------------------------|-------------------------------------|
+| Extract fresh training  | `extract_training_data.py`      | Clean training data from DB         |
+| Train model             | `train_lstm_forecast.py`        | Train LSTM from extracted metrics   |
+| Auto run forecast       | `auto_trigger_drift.py`         | Alert if blur > threshold           |
+| Schedule jobs           | `schedule`, `.bat`, `cron`      | Run training or drift logic on time |
+
+---
+
+## 📦 Optional Enhancements
+
+| Feature                         | Description                                                                 |
+|----------------------------------|-----------------------------------------------------------------------------|
+| SQLite backup rotation          | Auto-save `.db` file daily or weekly                                        |
+| Drift log table                 | Create another table to store timestamps of drift detections                |
+| Notification on drift           | Email, Slack, or webhook trigger                                           |
+| LSTM + Transformer hybrid       | Try transformer-based forecasters for long-term trends                     |
+| Multi-metric model              | Use multi-input LSTM (blur + brightness + entropy)                         |
+
+---
+
+## 📊 Dataset: nuScenes
+
+### 🔗 Official Download
+
+https://www.nuscenes.org/download
+
+Choose:
+- **nuScenes v1.0-mini**
+- File: `v1.0-mini.tgz`
+
+### 📁 Folder Structure
+
+```
+data/
+├── nuscenes/
+│   └── samples/
+│       └── CAM_FRONT/
+│           ├── 000001.jpg
+│           ├── 000002.jpg
+│           └── ...
+```
+
+This folder is read by:
+- `kafka_image_producer.py` to stream image frames
+
+---
+
+## 🔐 `.gitignore` and Clean Git Setup
+
+Make sure these are excluded:
+
+```
+# Ignore datasets and binaries
+data/nuscenes/
+models/
+*.pth
+*.db
+*.csv
+*.png
+__pycache__/
+.venv/
+*.zip
+
+# Grafana binaries
+grafana/grafana-v*/bin/
+```
+
+You can manually add `.gitkeep` to keep folders versioned.
+
+---
+
+## ✅ GitHub Maintenance Strategy
+
+| Action                              | Command / Tip                                        |
+|-------------------------------------|------------------------------------------------------|
+| Create new branch                   | `git checkout -b phase3-retraining`                  |
+| Backup before refactor              | `git checkout -b backup-before-refactor`             |
+| Push updated branch                 | `git push origin phase3-retraining`                 |
+| Remove large file from history      | `git filter-branch` or `git lfs migrate`             |
+| Cleanup local files                 | `git clean -fd` and `git prune`                      |
+| Tag stable release                  | `git tag v2.0-phase2` → `git push origin --tags`     |
+
+---
+
+## 📂 Final Folder Tree (So Far)
+
+```
+ADAS-Sensor-Degradation/
+├── data/
+│   ├── sensor_health.db
+│   ├── image_quality_metrics.csv
+│   └── forecast_visualization.png
+├── models/
+│   └── lstm_forecaster.pth
+├── scripts/
+│   ├── kafka_image_producer.py
+│   ├── kafka_image_consumer.py
+│   ├── simulate_degradation_data.py
+│   ├── extract_training_data.py
+│   ├── train_lstm_forecast.py
+│   ├── forecast_lstm_predict.py
+│   ├── forecast_visualizer.py
+│   ├── trial3_fastapi_monitor.py
+│   ├── trial_3_fastapi_sensor_health.py
+│   ├── auto_trigger_drift.py
+│   └── ...
+├── prometheus/
+│   └── prometheus.yml
+├── grafana/
+├── kafka/
+├── notebooks/
+├── pipeline/
+├── requirements.txt
+├── README.md
+└── LICENSE
+```
+
+---
+
+Next: **Phase 4 - Dashboard Deployment + CI/CD Automation**
+
+Let me know if you want that section continued next.
