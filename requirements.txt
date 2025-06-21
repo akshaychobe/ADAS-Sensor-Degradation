@@ -2,10 +2,11 @@ torch
 numpy
 scikit-learn
 matplotlib
+opencv-python
+kafka-python
 fastapi
 uvicorn
-torch
-numpy
-scikit-learn
 prometheus_client
 pydantic
+evidently
+schedule
